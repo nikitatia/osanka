@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Контроль осанки</title>
+    <link rel="stylesheet" href="main.css">
+</head>
+<body>
+    <header>
+        <h1>Контроль осанки</h1><br>
+    </header>
+    <main>
+        <div class="content-container">
+            <div class="camera-container">
+                <video id="videoElement" autoplay></video>
+                <button id="startButton">Начать контроль</button>
+                <button id="stopButton" style="display: none;">Остановить контроль</button>
+            </div>
+            <div class="description">
+                <h2>Правильная осанка</h2>
+                <p>Правильная осанка играет важную роль в общем состоянии здоровья и благополучии. Она помогает предотвратить боли в спине и шее, улучшает дыхание и способствует лучшему функционированию внутренних органов. Вот основные признаки правильной осанки:</p>
+                <ul>
+                    <li>Голова держится прямо, подбородок параллелен полу.</li>
+                    <li>Плечи развернуты и находятся на одном уровне.</li>
+                    <li>Грудная клетка приподнята, живот подтянут.</li>
+                    <li>Спина прямая, поясничный изгиб естественный.</li>
+                    <li>Колени прямые, но не напряжены.</li>
+                    <li>Вес тела равномерно распределен на обе ноги.</li>
+                </ul>
+                <p>Правильная осанка способствует улучшению общего самочувствия, повышению уровня энергии и уверенности в себе. Регулярные упражнения и осознанный контроль за положением тела помогут поддерживать здоровую осанку.</p>
+            </div>
+        </div>
+    </main>
+    <footer>
+        <p>&copy; 2024 Контроль осанки</p>
+    </footer>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
+    <script src="main.js"></script>
+</body>
+</html>
