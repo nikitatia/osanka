@@ -3,10 +3,9 @@ navigator.mediaDevices.getUserMedia({ video: true })
         var videoElement = document.getElementById('videoElement');
         videoElement.srcObject = stream;
 
-        // загрузка модели
-        return posenet.load();
+        return Promise.all([posenet.load(), cocoSsd.load()]);
     })
-    .then(function (net) {
+    .then(function ([posenetModel, cocoSsdModel]) {
         var startButton = document.getElementById('startButton');
         var stopButton = document.getElementById('stopButton');
         var intervalId, breakTimerId, breakTimeoutId;
@@ -16,41 +15,36 @@ navigator.mediaDevices.getUserMedia({ video: true })
             startButton.style.display = 'none';
             stopButton.style.display = 'inline-block';
 
-            // частота проверки осанки
             startBreakTimer();
             intervalId = setInterval(function () {
-                detectPosture(net);
+                detectPosture(posenetModel, cocoSsdModel);
             }, 1000);
         });
 
-        // контроль остановлен
         stopButton.addEventListener('click', function () {
             console.log('Контроль осанки остановлен');
             stopButton.style.display = 'none';
             startButton.style.display = 'inline-block';
 
-            clearInterval(intervalId); // сброс интервала проверки осанки
-            clearTimeout(breakTimerId); // сброс интервала напоминаний
-            clearTimeout(breakTimeoutId); // сброс перерыва
-            stopAlertSound(); // остановка звука в случае неправильной осанки
-            removeBlur(); // удаление блюра если сидит неправильно
+            clearInterval(intervalId); 
+            clearTimeout(breakTimerId); 
+            clearTimeout(breakTimeoutId); 
+            stopAlertSound(); 
+            resetVideoEffects(); 
         });
 
-        // начало работы интервала
         function startBreakTimer() {
             breakTimerId = setTimeout(function () {
                 showBreakNotification();
             }, 45 * 60 * 1000);
         }
 
-        // показать уведомление о перерыве
         function showBreakNotification() {
             var breakAudio = new Audio('break.mp3');
             var unbreakAudio = new Audio('unbreak.mp3');
             breakAudio.play();
             alert('Пора сделать перерыв на 7 минут!');
 
-            // конец перерыва
             breakTimeoutId = setTimeout(function () {
                 if (confirm('Перерыв окончен! Вернитесь к работе.')) {
                     startBreakTimer();
@@ -66,8 +60,7 @@ navigator.mediaDevices.getUserMedia({ video: true })
 var isPlayingSound = false;
 var isPostureNotificationShown = false;
 
-// обнаружение положения 
-function detectPosture(net) {
+function detectPosture(posenetModel, cocoSsdModel) {
     var videoElement = document.getElementById('videoElement');
     var imageScaleFactor = 0.5;
     var outputStride = 16;
@@ -78,24 +71,40 @@ function detectPosture(net) {
     canvas.height = videoElement.videoHeight;
     ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
-    net.estimateSinglePose(canvas, imageScaleFactor, flipHorizontal, outputStride)
-        .then(function (pose) {
-            if (checkPosture(pose)) {
-                console.log('Вы сидите ровно');
-                removeBlur();
-                stopAlertSound();
-            } else {
-                console.log('Сядьте ровно!');
-                playAlertSound();
-                applyBlur();
-            }
-        })
-        .catch(function (err) {
-            console.log("An error occurred: " + err);
-        });
+    cocoSsdModel.detect(canvas).then(predictions => {
+        const people = predictions.filter(prediction => prediction.class === 'person');
+        if (people.length > 1) {
+            console.log('Несколько людей обнаружено');
+            playMultipleUsersAlert();
+            applyMultipleUsersEffects();
+        } 
+        else if (people.length < 1) {
+            console.log('Нет людей в кадре');
+            applyNoUsersEffects();
+            stopAlertSound();
+        } 
+        else {
+            posenetModel.estimateSinglePose(canvas, imageScaleFactor, flipHorizontal, outputStride)
+                .then(function (pose) {
+                    if (checkPosture(pose)) {
+                        console.log('Вы сидите ровно');
+                        resetVideoEffects();
+                        stopAlertSound();
+                    } else {
+                        console.log('Сядьте ровно!');
+                        playAlertSound();
+                        applyVideoEffects();
+                    }
+                })
+                .catch(function (err) {
+                    console.log("An error occurred: " + err);
+                });
+        }
+    }).catch(function (err) {
+        console.log("An error occurred: " + err);
+    });
 }
 
-// функция для вычисления правильной осанки
 function checkPosture(pose) {
     const rightEye = pose.keypoints[2].position;
     const leftEye = pose.keypoints[1].position;
@@ -115,29 +124,52 @@ function checkPosture(pose) {
     return (eyeDistance <= minEyeDistance && shoulderDistance <= minShoulderDistance && rightEyeShoulderDistance >= minrightEyeShoulderDistance && leftEyeShoulderDistance >= minleftEyeShoulderDistance);
 }
 
-// создание элемента для блюра всего экрана
-var blurOverlay = document.createElement('div');
-blurOverlay.style.position = 'fixed';
-blurOverlay.style.top = '0';
-blurOverlay.style.left = '0';
-blurOverlay.style.width = '100%';
-blurOverlay.style.height = '100%';
-blurOverlay.style.backdropFilter = 'blur(5px)';
-blurOverlay.style.zIndex = '1000';
-blurOverlay.style.display = 'none';
-document.body.appendChild(blurOverlay);
-
-function applyBlur() {
-    blurOverlay.style.display = 'block';
+function applyVideoEffects() {
+    var bodyElement = document.body;
+    var videoElement = document.getElementById('videoElement');
+    bodyElement.classList.add('incorrect-posture');
+    bodyElement.classList.remove('correct-posture', 'multiple-users', 'no-users');
+    videoElement.classList.add('incorrect-posture-video');
+    videoElement.classList.remove('correct-posture-video');
 }
 
-function removeBlur() {
-    blurOverlay.style.display = 'none';
+function resetVideoEffects() {
+    var bodyElement = document.body;
+    var videoElement = document.getElementById('videoElement');
+    bodyElement.classList.remove('incorrect-posture', 'multiple-users', 'no-users');
+    bodyElement.classList.add('correct-posture');
+    videoElement.classList.remove('incorrect-posture-video');
+    videoElement.classList.add('correct-posture-video');
+}
+
+function applyNoUsersEffects() {
+    var bodyElement = document.body;
+    bodyElement.classList.add('no-users');
+    bodyElement.classList.remove('correct-posture', 'incorrect-posture', 'multiple-users');
+    videoElement.classList.remove('incorrect-posture-video');
+}
+
+function applyMultipleUsersEffects() {
+    var bodyElement = document.body;
+    bodyElement.classList.add('multiple-users');
+    bodyElement.classList.remove('correct-posture', 'incorrect-posture', 'no-users');
+    videoElement.classList.remove('incorrect-posture-video');
 }
 
 function playAlertSound() {
     if (!isPlayingSound) {
-        var audio = new Audio('sound.mp3');
+        var audio = new Audio('cc182e30aaa0ad1ab614548f7ab3be6b.mp3');
+        audio.loop = true;
+        audio.play();
+        isPlayingSound = true;
+
+        window.alertAudio = audio;
+    }
+}
+
+function playMultipleUsersAlert() {
+    if (!isPlayingSound) {
+        var audio = new Audio('soundd.mp3');
         audio.loop = true;
         audio.play();
         isPlayingSound = true;
